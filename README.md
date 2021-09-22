@@ -29,7 +29,9 @@ Azure Cosmos DB is a globally distributed multi-model database. One of the suppo
 
 1. Change directories to the repo using `cd cosmosdb`
 
-1. Next, update credentials the file `src/main/resources/reference.conf` (you can get the values from "connection string" tab in Azure portal):
+1. Create a keyspace and table in your Cassandra API account. For help see tutorials [here](https://docs.microsoft.com/azure/cosmos-db/cassandra/create-account-java).
+
+1. Next, update the file `src/main/resources/reference.conf` with keyspace and table name, and your Cassandra API account credentials (you can get the values from "connection string" tab in Azure portal):
 
     ```conf
         cassandra {
@@ -54,7 +56,7 @@ Azure Cosmos DB is a globally distributed multi-model database. One of the suppo
         }
     ```
 
-1. Run `mvn clean package` from your current directory to build the project. This will generate azure-cosmos-cassandra-examples-1.0.0-SNAPSHOT.jar under target folder.
+1. Run `mvn clean package` from your current directory to build the project. This will generate azure-cosmos-cassandra-examples.jar under target folder.
  
 1. Run `java -jar target/comsosdb-cassandra-changefeed-processor.jar` in a terminal to start your java application. This will create a table called `change_feed_page_state` in your chosen keyspace. The program will run for 30 seconds. If you update a record in your chosen table while this is running, you will see being processed by a worker thread, as below: 
 
