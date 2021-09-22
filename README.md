@@ -58,7 +58,7 @@ Azure Cosmos DB is a globally distributed multi-model database. One of the suppo
 
 1. Run `mvn clean package` from your current directory to build the project. This will generate azure-cosmos-cassandra-examples.jar under target folder.
  
-1. Run `java -jar target/comsosdb-cassandra-changefeed-processor.jar` in a terminal to start your java application. This will create a table called `change_feed_page_state` in your chosen keyspace. The program will run for 30 seconds. If you update a record in your chosen table while this is running, you will see being processed by a worker thread, as below: 
+1. Run `java -jar target/comsosdb-cassandra-changefeed-processor.jar` in a terminal to start your java application. This will create a table called `change_feed_page_state` in your chosen keyspace. The program will run for 30 seconds. If you update a record in your chosen table while this is running, you will see the record being processed by a worker thread, as below: 
 
    ![Console output](./media/cfp-output.jpg)
 
