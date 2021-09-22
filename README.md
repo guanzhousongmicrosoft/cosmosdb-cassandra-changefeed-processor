@@ -11,7 +11,7 @@ urlFragment: cosmosdb-cassandra-changefeed-processor
 # Using FeedRanges to parallelise processing of change feed in Cosmos DB Cassandra API
 Azure Cosmos DB is a globally distributed multi-model database. One of the supported APIs is the Cassandra API. This sample illustrates how to use FeedRanges in Cassandra API to parallelise processing when reading from Azure Cosmos DB's change feed.
 
-[!NOTE] FeedRanges for Azure Cosmos DB Cassandra API is currently in *private preview*. Please reach out to us to have this feature enabled for your account. 
+**Note**: FeedRanges support for Cassandra API is currently in *private preview*. Please reach out to Microsoft to have this feature enabled for your Cosmos DB account. 
 
 ## Prerequisites
 * Before you can run this sample, you must have the following prerequisites:
