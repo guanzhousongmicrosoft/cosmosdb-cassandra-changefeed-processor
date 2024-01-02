@@ -1,9 +1,9 @@
 package com.microsoft.azure.cosmosdb.cassandra.examples.cfp;
 
-import com.datastax.driver.core.ColumnDefinitions;
-import com.datastax.driver.core.Row;
-import com.datastax.driver.core.Session;
-import com.microsoft.azure.cosmosdb.cassandra.util.CassandraUtil;
+import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.cql.*;
+import com.microsoft.azure.cosmosdb.cassandra.util.CassandraAPIUtil;
+import com.microsoft.azure.cosmosdb.cassandra.util.MICassandraUtil;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import org.slf4j.Logger;
@@ -18,9 +18,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class ExampleApp extends ChangeFeedApp{
 
     private static final Logger log = LoggerFactory.getLogger(ExampleApp.class.getName());
-    private final AtomicInteger numProcessed = new AtomicInteger(0);
 
-    public ExampleApp(Session session,
+    public ExampleApp(CqlSession session_API,
+                      CqlSession session_MI,
                       String keyspace,
                       String table,
                       Timestamp startTime,
@@ -28,34 +28,22 @@ public class ExampleApp extends ChangeFeedApp{
                       int maxConcurrency,
                       int workerMinTime)
     {
-        super(session, keyspace, table, startTime, pageSize, maxConcurrency, workerMinTime);
+        super(session_API, session_MI , keyspace, table, startTime, pageSize, maxConcurrency, workerMinTime);
     }
 
     @Override
     public void stop() {
         super.stop();
-        log.info("Graceful shutdown complete after processing {} rows", this.numProcessed.get());
-    }
-
-    @Override
-    public void process(Row row){
-        StringBuilder sb = new StringBuilder();
-        for (ColumnDefinitions.Definition column : row.getColumnDefinitions()) {
-            sb.append(column.getName());
-            sb.append("=");
-            sb.append(row.getObject(column.getName()));
-            sb.append(", ");
-        }
-
-        log.info("Processed {}", sb.toString());
-        this.numProcessed.incrementAndGet();
+        log.info("Graceful shutdown complete after processing rows");
     }
 
     public static void main(String[] args) throws Exception {
         Config config = ConfigFactory.load();
-        try(CassandraUtil util = new CassandraUtil(config)) {
+        try(CassandraAPIUtil util_API = new CassandraAPIUtil(config);
+            MICassandraUtil util_MI = new MICassandraUtil(config)) {
             ExampleApp app = new ExampleApp(
-                    util.getSession(),
+                    util_API.getSession(),
+                    util_MI.getSession(),
                     config.getString("change_feed.keyspace"),
                     config.getString("change_feed.table"),
                     Timestamp.valueOf(config.getString("change_feed.start")),
@@ -63,7 +51,7 @@ public class ExampleApp extends ChangeFeedApp{
                     config.getInt("change_feed.concurrency"),
                     config.getInt("change_feed.min_execution_millis"));
             app.start();
-            Thread.sleep(30000);
+            Thread.sleep(3000000);
             app.stop();
         }
     }

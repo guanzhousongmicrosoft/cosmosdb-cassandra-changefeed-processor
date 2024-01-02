@@ -1,6 +1,7 @@
 package com.microsoft.azure.cosmosdb.cassandra.examples.cfp;
 
-import com.datastax.driver.core.*;
+import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.cql.*;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -20,13 +21,13 @@ import java.util.stream.StreamSupport;
 public class FeedRangeManager {
     private final static String COMPLETE_RANGE_MARKER  = "complete";
 
-    private final Session session;
+    private final CqlSession session;
     private final String keyspace;
     private final String table;
     private final Map<String, String> pageStates = new HashMap<>();
     private PreparedStatement updatePageStatement;
 
-    public FeedRangeManager(Session session, String keyspace, String table) {
+    public FeedRangeManager(CqlSession session, String keyspace, String table) {
         this.session = session;
         this.keyspace = keyspace;
         this.table = table;

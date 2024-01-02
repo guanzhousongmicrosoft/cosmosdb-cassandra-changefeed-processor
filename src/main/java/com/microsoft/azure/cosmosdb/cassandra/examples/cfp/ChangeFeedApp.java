@@ -1,7 +1,6 @@
 package com.microsoft.azure.cosmosdb.cassandra.examples.cfp;
 
-import com.datastax.driver.core.Row;
-import com.datastax.driver.core.Session;
+import com.datastax.oss.driver.api.core.CqlSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,7 +18,8 @@ public abstract class ChangeFeedApp {
 
     private static final Logger log = LoggerFactory.getLogger(ChangeFeedApp.class.getName());
 
-    private final Session session;
+    private final CqlSession session_API;
+    private final CqlSession session_MI;
     private final String keyspace;
     private final String table;
     private final Timestamp startTime;
@@ -28,7 +28,8 @@ public abstract class ChangeFeedApp {
     private final int workerMinTime;
     private List<Thread> workerThreads;
 
-    public ChangeFeedApp(Session session,
+    public ChangeFeedApp(CqlSession session_API,
+                         CqlSession session_MI,
                          String keyspace,
                          String table,
                          Timestamp startTime,
@@ -36,7 +37,8 @@ public abstract class ChangeFeedApp {
                          int maxConcurrency,
                          int workerMinTime)
     {
-        this.session = session;
+        this.session_API = session_API;
+        this.session_MI = session_MI;
         this.keyspace = keyspace;
         this.table = table;
         this.startTime = startTime;
@@ -48,7 +50,7 @@ public abstract class ChangeFeedApp {
 
     public void start()
     {
-        FeedRangeManager feedRangeManager = new FeedRangeManager(session, this.keyspace, this.table);
+        FeedRangeManager feedRangeManager = new FeedRangeManager(session_API, this.keyspace, this.table);
         feedRangeManager.init();
 
         List<String> feedRanges = feedRangeManager.getAllFeedRanges();
@@ -59,8 +61,8 @@ public abstract class ChangeFeedApp {
         for (int workerId = 0; workerId < numWorkers; workerId++){
             Worker worker = new Worker(
                     feedRangeManager,
-                    this::process,
-                    this.session,
+                    this.session_API,
+                    this.session_MI,
                     this.keyspace,
                     this.table,
                     workerRanges.get(workerId),
@@ -96,13 +98,6 @@ public abstract class ChangeFeedApp {
             log.error("Interrupted waiting for shutdown", e);
         }
     }
-
-    /**
-     * The callback from the worker threads.  This will be called by multiple threads.
-     *
-     * @param row the row to process.
-     */
-    public abstract void process(Row row);
 
     private static Map<Integer, List<String>> distributeFeedRanges(List<String> allRanges, int numWorkers){
         Map<Integer, List<String>> workerRanges = new HashMap<>(numWorkers);
