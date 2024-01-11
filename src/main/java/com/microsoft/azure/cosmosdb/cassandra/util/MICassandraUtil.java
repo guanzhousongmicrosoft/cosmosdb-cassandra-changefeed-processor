@@ -1,7 +1,13 @@
 package com.microsoft.azure.cosmosdb.cassandra.util;
 
+import com.datastax.oss.driver.api.core.CqlIdentifier;
 import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.metadata.Metadata;
+import com.datastax.oss.driver.api.core.metadata.schema.KeyspaceMetadata;
+import com.datastax.oss.driver.api.core.metadata.schema.TableMetadata;
 import com.typesafe.config.Config;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
@@ -13,11 +19,16 @@ import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.security.*;
 import java.security.cert.CertificateException;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Cassandra utility class to handle the Cassandra Sessions
  */
 public class MICassandraUtil implements AutoCloseable{
+    private static final Logger log = LoggerFactory.getLogger(MICassandraUtil.class.getName());
 
     private CqlSession session;
     private Config config;
@@ -67,7 +78,7 @@ public class MICassandraUtil implements AutoCloseable{
                 .addContactPoint(new InetSocketAddress(cassandraHost, cassandraPort)).withLocalDatacenter(dataCenter)
                 .withAuthCredentials(cassandraUsername, cassandraPassword).build();
 
-        System.out.println("Creating session: " + session.getName());
+        log.info("Creating session: " + session.getName());
         return session;
     }
 
@@ -111,5 +122,52 @@ public class MICassandraUtil implements AutoCloseable{
             throw new Exception(
                     String.format("Unable to access the SSL Key Store file from %s", ssl_keystore_file_path));
         }
+    }
+
+    //Get all tables and try to create them in the MI
+    public static void createKeyspaceAndTableIfNotExists(CqlSession session_api, CqlSession session_MI, String keyspace, String table){
+        Metadata metadata = session_api.getMetadata();
+        metadata.getKeyspace(keyspace).ifPresent(ks -> {
+                    String keyspace_description = ks.describe(false);
+                    log.info("Keyspace description: " + keyspace_description);
+                    keyspace_description = keyspace_description.replace("CREATE KEYSPACE", "CREATE KEYSPACE IF NOT EXISTS");
+                    session_MI.execute(keyspace_description);
+                    log.info("Keyspace created: " + keyspace);});
+
+        metadata.getKeyspace(keyspace).ifPresent(ks -> {
+            ks.getTable(table).ifPresent(tableMetadata -> {
+                if(tableMetadata.getName().asInternal().equals("change_feed_page_state")){
+                    return;
+                }
+
+                String description = tableMetadata.describe(false);
+
+                description = description.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS");
+                description = description.replaceAll("\\bAND\\s+dclocal_read_repair_chance\\s*=\\s*0\\.0\\b", "");
+                description = description.replaceAll("\\bAND\\s+read_repair_chance\\s*=\\s*0\\.0\\b", "");
+                log.info("Table description: " + description);
+
+                session_MI.execute(description);
+                log.info("Table created: " + table);
+            });
+
+        });
+    }
+
+    public static Set<TableIdentifier> getAllKeyspacesAndTables(CqlSession session_api){
+        Set<TableIdentifier> res = new HashSet<>();
+        Metadata metadata = session_api.getMetadata();
+        Map<CqlIdentifier, KeyspaceMetadata> keyspaces = metadata.getKeyspaces();
+        for (Map.Entry<CqlIdentifier, KeyspaceMetadata> entry : keyspaces.entrySet()) {
+            log.info("Keyspace: " + entry.getKey());
+            KeyspaceMetadata keyspaceMetadata = entry.getValue();
+            Map<CqlIdentifier, TableMetadata> tables = keyspaceMetadata.getTables();
+            for (Map.Entry<CqlIdentifier, TableMetadata> tableEntry : tables.entrySet()) {
+                log.info("Table: " + tableEntry.getKey());
+                res.add(new TableIdentifier(entry.getKey(), tableEntry.getKey()));
+            }
+        }
+
+        return res;
     }
 }

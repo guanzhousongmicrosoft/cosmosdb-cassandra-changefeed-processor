@@ -1,14 +1,16 @@
 package com.microsoft.azure.cosmosdb.cassandra.examples.cfp;
 
 import com.datastax.oss.driver.api.core.CqlSession;
+import com.microsoft.azure.cosmosdb.cassandra.util.MICassandraUtil;
+import com.microsoft.azure.cosmosdb.cassandra.util.TableIdentifier;
+import com.microsoft.azure.cosmosdb.cassandra.util.Tuple;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.sql.Timestamp;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 /**
  * An application will read from a Cassandra change feed using feed ranges.
@@ -20,18 +22,16 @@ public abstract class ChangeFeedApp {
 
     private final CqlSession session_API;
     private final CqlSession session_MI;
-    private final String keyspace;
-    private final String table;
     private final Timestamp startTime;
     private final int pageSize;
     private final int maxConcurrency;
     private final int workerMinTime;
     private List<Thread> workerThreads;
+    private AtomicInteger numProcessed = new AtomicInteger(0);
+    private Set<TableIdentifier> tables;
 
     public ChangeFeedApp(CqlSession session_API,
                          CqlSession session_MI,
-                         String keyspace,
-                         String table,
                          Timestamp startTime,
                          int pageSize,
                          int maxConcurrency,
@@ -39,8 +39,6 @@ public abstract class ChangeFeedApp {
     {
         this.session_API = session_API;
         this.session_MI = session_MI;
-        this.keyspace = keyspace;
-        this.table = table;
         this.startTime = startTime;
         this.pageSize = pageSize;
         this.maxConcurrency = maxConcurrency;
@@ -50,12 +48,24 @@ public abstract class ChangeFeedApp {
 
     public void start()
     {
-        FeedRangeManager feedRangeManager = new FeedRangeManager(session_API, this.keyspace, this.table);
+        this.tables = MICassandraUtil.getAllKeyspacesAndTables(session_API);
+        this.tables = this.tables.stream().filter(t -> !t.getTable().asInternal().equalsIgnoreCase("change_feed_page_state")).collect(Collectors.toSet());
+
+        for(TableIdentifier tableIdentifier : this.tables){
+            log.info("Table: {}", tableIdentifier.getTable());
+            MICassandraUtil.createKeyspaceAndTableIfNotExists(session_API, session_MI,
+                    tableIdentifier.getKeyspace().asInternal(),
+                    tableIdentifier.getTable().asInternal());
+        }
+
+        FeedRangeManager feedRangeManager = new FeedRangeManager(session_API, this.tables);
         feedRangeManager.init();
 
-        List<String> feedRanges = feedRangeManager.getAllFeedRanges();
+        List<Tuple<TableIdentifier, String>> feedRanges = feedRangeManager.getAllFeedRanges(this.tables);
         int numWorkers = Math.min(this.maxConcurrency, feedRanges.size());
-        Map<Integer, List<String>> workerRanges = distributeFeedRanges(feedRangeManager.getAllFeedRanges(), numWorkers);
+
+        Map<Integer, List<Tuple<TableIdentifier, String>>> workerRanges = distributeFeedRanges(feedRanges, numWorkers);
+
 
         this.workerThreads = new ArrayList<>(numWorkers);
         for (int workerId = 0; workerId < numWorkers; workerId++){
@@ -63,12 +73,11 @@ public abstract class ChangeFeedApp {
                     feedRangeManager,
                     this.session_API,
                     this.session_MI,
-                    this.keyspace,
-                    this.table,
                     workerRanges.get(workerId),
                     this.startTime,
                     pageSize,
-                    workerMinTime);
+                    workerMinTime,
+                    numProcessed);
 
             Thread workerThread = new Thread(worker);
             workerThread.setDaemon(true);
@@ -99,12 +108,12 @@ public abstract class ChangeFeedApp {
         }
     }
 
-    private static Map<Integer, List<String>> distributeFeedRanges(List<String> allRanges, int numWorkers){
-        Map<Integer, List<String>> workerRanges = new HashMap<>(numWorkers);
+    private static Map<Integer, List<Tuple<TableIdentifier, String>>> distributeFeedRanges(List<Tuple<TableIdentifier, String>> allRanges, int numWorkers){
+        Map<Integer, List<Tuple<TableIdentifier, String>>> workerRanges = new HashMap<>(numWorkers);
 
         for (int i = 0; i < allRanges.size(); i++) {
             int worker = i % numWorkers;
-            List<String> currentRange = workerRanges.computeIfAbsent(worker, k -> new ArrayList<>(allRanges.size() / numWorkers + 1));
+            List<Tuple<TableIdentifier, String>> currentRange = workerRanges.computeIfAbsent(worker, k -> new ArrayList<>(allRanges.size() / numWorkers + 1));
 
             currentRange.add((allRanges.get(i)));
         }

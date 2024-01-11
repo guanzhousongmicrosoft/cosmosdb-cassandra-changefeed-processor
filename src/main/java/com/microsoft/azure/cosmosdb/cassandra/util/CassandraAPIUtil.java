@@ -1,7 +1,10 @@
 package com.microsoft.azure.cosmosdb.cassandra.util;
 
 import com.datastax.oss.driver.api.core.CqlSession;
+import com.microsoft.azure.cosmosdb.cassandra.examples.cfp.Worker;
 import com.typesafe.config.Config;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
@@ -18,7 +21,7 @@ import java.security.cert.CertificateException;
  * Cassandra utility class to handle the Cassandra Sessions
  */
 public class CassandraAPIUtil implements AutoCloseable {
-
+    private static final Logger log = LoggerFactory.getLogger(CassandraAPIUtil.class.getName());
     private CqlSession session;
     private Config config;
     private String cassandraHost = "127.0.0.1";
@@ -71,7 +74,7 @@ public class CassandraAPIUtil implements AutoCloseable {
                 .withLocalDatacenter(region)
                 .build();
 
-        System.out.println("Creating session: " + session.getName());
+        log.info("Creating session: " + session.getName());
         return session;
     }
 
@@ -88,11 +91,11 @@ public class CassandraAPIUtil implements AutoCloseable {
      * @throws Exception
      */
     private void loadCassandraConnectionDetails() throws Exception {
-        cassandraPort = config.getInt("cassandra.port");
-        cassandraUsername = config.getString("cassandra.username");
-        cassandraHost = config.getString("cassandra.host");
-        region = config.getString("cassandra.region");
-        cassandraPassword = config.getString("cassandra.password");
+        cassandraPort = config.getInt("cassandra_API.port");
+        cassandraUsername = config.getString("cassandra_API.username");
+        cassandraHost = config.getString("cassandra_API.host");
+        region = config.getString("cassandra_API.region");
+        cassandraPassword = config.getString("cassandra_API.password");
         String keyStorePath = config.getString("ssl.keystore.file");
         String keyStorePass = config.getString("ssl.keystore.password");
 

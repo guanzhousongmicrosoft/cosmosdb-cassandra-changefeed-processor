@@ -21,14 +21,12 @@ public class ExampleApp extends ChangeFeedApp{
 
     public ExampleApp(CqlSession session_API,
                       CqlSession session_MI,
-                      String keyspace,
-                      String table,
                       Timestamp startTime,
                       int pageSize,
                       int maxConcurrency,
                       int workerMinTime)
     {
-        super(session_API, session_MI , keyspace, table, startTime, pageSize, maxConcurrency, workerMinTime);
+        super(session_API, session_MI ,startTime, pageSize, maxConcurrency, workerMinTime);
     }
 
     @Override
@@ -44,8 +42,6 @@ public class ExampleApp extends ChangeFeedApp{
             ExampleApp app = new ExampleApp(
                     util_API.getSession(),
                     util_MI.getSession(),
-                    config.getString("change_feed.keyspace"),
-                    config.getString("change_feed.table"),
                     Timestamp.valueOf(config.getString("change_feed.start")),
                     config.getInt("change_feed.page_size"),
                     config.getInt("change_feed.concurrency"),
