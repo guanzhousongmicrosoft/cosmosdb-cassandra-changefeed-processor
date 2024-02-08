@@ -6,7 +6,7 @@ import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.cql.Row;
 import com.datastax.oss.driver.api.core.servererrors.OverloadedException;
-import com.microsoft.azure.cosmosdb.cassandra.util.MICassandraUtil;
+import com.microsoft.azure.cosmosdb.cassandra.util.SessionLimiter;
 import com.microsoft.azure.cosmosdb.cassandra.util.TableIdentifier;
 import com.microsoft.azure.cosmosdb.cassandra.util.Tuple;
 import org.slf4j.Logger;
@@ -14,10 +14,8 @@ import org.slf4j.LoggerFactory;
 
 import java.sql.Timestamp;
 import java.util.*;
-import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
 
 /**
  * The example worker loops through all of it's assigned ranges and logging the
@@ -37,7 +35,7 @@ public class Worker implements Runnable {
     private final int pageSize;
     private AtomicInteger numProcessed;
     private Map<TableIdentifier, PreparedStatement> preparedStatementMap;
-    private final int batchSize = 10;
+    private SessionLimiter sessionLimiter_MI;
 
     public Worker(FeedRangeManager feedRangeManager,
                   CqlSession session_API,
@@ -56,6 +54,7 @@ public class Worker implements Runnable {
         this.minExecutionMillis = minExecutionMillis;
         this.preparedStatementMap = new HashMap<>();
         this.numProcessed = numProcessed;
+        this.sessionLimiter_MI = new SessionLimiter(session_MI, 1000);
     }
 
     public void run() {
@@ -77,7 +76,8 @@ public class Worker implements Runnable {
         try {
             while (!Thread.currentThread().isInterrupted()) {
                 log.info("Processed total rows: {} Time: {} ", new Timestamp(System.currentTimeMillis()), this.numProcessed.get());
-                if (rangeIndex == 0){
+                if (rangeIndex == 0)
+                {
                     long now = System.nanoTime();
                     long rotationTime = rotationStarted == -1 ? -1 : TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - rotationStarted);
                     if ( rotationTime >= 0 && rotationTime < this.minExecutionMillis){
@@ -146,7 +146,6 @@ public class Worker implements Runnable {
 
 
                 int rowsRemaining = resultSize;
-                List<BoundStatement> boundStatements = new ArrayList<>(batchSize);
 
                 for (Row row : results) {
                     rowsRemaining--;
@@ -155,12 +154,9 @@ public class Worker implements Runnable {
                         values.add(row.getObject(columns[i]));
                     }
 
-                    boundStatements.add(preparedInsertStatement.bind(values.toArray()));
+                    BoundStatement boundStatement_row = preparedInsertStatement.bind(values.toArray());
 
-                    if(boundStatements.size() == batchSize || rowsRemaining == 0){
-                        BatchStatement batch = BatchStatement.newInstance(DefaultBatchType.LOGGED, boundStatements.toArray(new BoundStatement[0]));
-                        session_MI.execute(batch);
-                    }
+                    this.sessionLimiter_MI.executeAsync(boundStatement_row);
 
                     //log.info("prepared row {}: {}", rowsRemaining, values);
                     if (rowsRemaining == 0) {
@@ -168,6 +164,7 @@ public class Worker implements Runnable {
                     }
                 }
 
+                this.sessionLimiter_MI.waitForFinish();
                 this.numProcessed.addAndGet(resultSize);
             }
 
